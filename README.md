@@ -40,15 +40,15 @@ MTRANS : Transportation used
 
 ## My Obejctive
 Given these attributes, I approached this project with the goal of trying to find the answers to the following questions:
-1. What kind of characteristics do people in this data set have? (Since it is important to know the distribution of each variable)
+1. What kind of characteristics do people in this data set have? 
 2. Can Obesity_Type be classified based on BMI (Is it the same?) - Since BMI will be better for interpreting results (it is numeric)
 3. Most Important: Which eating habit and physical condition variables are most related to obesity levels?
 
 ## Predictions
-My thoughts would be that: 
-- family with obesity, alcohol consumption, frequent consumption of high caloric food, consumption of food between meals, female gender  would produce/have  more obesity
+I wanted to test if: 
+- family with obesity, alcohol consumption, frequent consumption of high caloric food, consumption of food between meals would produce more obesity
 - more CH20, calories consumption monitoring, phyical activity frequency, more consumption of vegetables would be correlated whith lower BMI
-- I would suggest that people that smoke have lower BMI and that people who walk or bike have lower BMI
+- people that smoke have lower BMI and that people who walk or bike have lower BMI
 
 ## Analysis 
 In order to do my analysis, I divided it into three tasks:
