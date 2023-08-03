@@ -194,6 +194,6 @@ cor(Obesity_Analysis)
 #Age also do influence BMI. Younger people usually have lower BMI.
 #Height and Weight are positively skewed, with females tending to have wider ranges in terms of their weight.
 #More physical activity and using transportation methods such as hiking or walking help have lower BMI
-#However alcohol, CH2O, consumption of food between meals and vegetables did not predict BMI
+#However alcohol, CH2O, CAEC consumption of food between meals and vegetables did not predict BMI
 #Smokers and Food intake monitoring might not be good samples for this analysis since they did not have enough data in some categories
 
