@@ -69,7 +69,7 @@ Lastky I plotted weight, height and gender. I did the same with Age, BMI and Gen
 With function cor() I compared each value to each other.
 Cor() only takes quantitative data into account, so we are not able to compare the numbers from these variables to those of the qualitative and categorical variables
 
-## Conclusion
+## Interpretation
 1. - From the subplots of categorial variables we see that Smokers and Food intake monitoring might not be good samples for this analysis since they do not have enough data in some categories
    - Also a lot of them have families with overweight and do consume high caloric foods (they have enough data to use for further analysis)
 2. - From the subplots comparing variables to BMI we see that BMI and Obesity_Type are correlated (BMI is a good measure)
@@ -83,6 +83,7 @@ Cor() only takes quantitative data into account, so we are not able to compare t
 4. - From the correlation we can observe that Weight, Age and FAF are the best predictors
 #cor() only takes quantitative data into account, so we are not able to compare the numbers from these variables to those of the qualitative and categorical variables
 
+## Conclusion
 All in all my prediction  that People with family history overweight and high caloric food consumption tend to have higher BMI was right. Age also do influence BMI. Females tend to have wider ranges of weight, meaning that they coud be either more obese or skinny. I was also right on more physical activity and using transportation methods such as biking or walking would help have lower BMI. However alcohol, CH2O, CAEC, consumption of food between meals and consumption of vegetables vegetables did not predict BMI. I though that consuption of food between meals would rise BMI, but it does not correlate much and actually poeple consuming more food between meals tend to have lower BMI. I also thought CH20 would help with lower BMI, but it did not correlate. Smokers and Food intake monitoring might not be good samples for this analysis since they did not have enough data in some categories
 
 
