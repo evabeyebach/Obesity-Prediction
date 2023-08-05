@@ -152,7 +152,13 @@ ggplot(data = OBESITY, mapping = aes(x = Weight, y = Height, col = Gender))+
   labs(title = list(text = paste0('Correlation of Height and Weight')),
        x = "Weight",
        y = "Height"
-  ) 
+  ) +
+  theme(legend.title = element_blank(),
+        plot.title = element_text(face = "bold"),
+        panel.background = element_rect(fill = "#ffffff"),
+        axis.line.y = element_line(colour = "grey"),
+        axis.line.x = element_line())
+
 #linear positive relationship between Weight and Height in Genders
 #females tending to have wider ranges in terms of their weight
 
