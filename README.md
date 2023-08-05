@@ -1,4 +1,4 @@
-# Obesity-Prediction
+# Obesity Levels Analysis
 ## Introduction
 Nowadays, Obesity is one of the most important health-related issues in the world. Worldwide, more than 1 billion people have obesity and 19.7% of adolescents and children in the U.S (14.7 million individuals) have obesity. Due to this very reason, it is very crucial to analyze the issue deeply. This dataset include data for the estimation of obesity levels based on their eating habits and physical condition in individuals from the countries of Mexico, Peru and Colombia. I am interested in the relationship between body fat levels and lifestyle habits, and see if the findings can help people be more conscious about obesity.
 ## About the data set 
