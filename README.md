@@ -16,8 +16,15 @@ We will answer the following questions:
 5. Which other variables correlate with each other?
 
 ## Analysis
-We will start of with some Data Preparation, Cleaning, handling missing values etc. The we will plot some graphs in order to understand the distributions. We will perform differnt anlysis, like Pruned **Random Forest**, Tuned **Decision Tree**, **Logistic Regression** and **Linear Regression**. After comparing the Accuracy, we will decide which model is better to predict obesity.
-We will also do **Chi Square** and **T-test** to look at the relationship between variables.
+1. Data Preparation, Cleaning, handling missing values
+2. Plotting and Correlation Matrix
+3. Modelling:
+   - Pruned **Random Forest**,
+   - Tuned **Decision Tree**,
+   - **Logistic Regression** 
+   - **Linear Regression**
+   - **Chi Square** 
+   - **T-test** 
 
 ## Findings and Results
 1. 
@@ -40,6 +47,7 @@ We will also do **Chi Square** and **T-test** to look at the relationship betwee
 We can conclude that BMI adversely affects health by elevating blood pressure and heart rate, as well as contributing to diminished sleep quality and the onset of sleep disorders. High stress levels corresponded with elevated heart rates. All this can lead to diseases, diabetes, sleeping disorders and poor health.
 
 **We have the following recommendations to improve health:**
+
 -More Steps
 -More Activity
 -Both variables reduced BMI and stress, which consecutively reduces heart rate, blood pressure and improves sleep quality and sleep duration, causing less sleep disorders.
