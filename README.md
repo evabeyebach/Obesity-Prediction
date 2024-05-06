@@ -37,8 +37,7 @@ We will also do **Chi Square** and **T-test** to look at the relationship betwee
 - StressLevel and Heartrate & StressLevel and Blood pressure correlate with each other.
 
 ## Recommendations
-
-1. We can conclude that BMI adversely affects health by elevating blood pressure and heart rate, as well as contributing to diminished sleep quality and the onset of sleep disorders. High stress levels corresponded with elevated heart rates. All this can lead to diseases, diabetes, sleeping disorders and poor health.
+We can conclude that BMI adversely affects health by elevating blood pressure and heart rate, as well as contributing to diminished sleep quality and the onset of sleep disorders. High stress levels corresponded with elevated heart rates. All this can lead to diseases, diabetes, sleeping disorders and poor health.
 
 **We have the following recommendations to improve health:**
 -More Steps
