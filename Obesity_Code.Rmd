@@ -1,0 +1,901 @@
+---
+title: "Obesity_Code"
+output: html_document
+date: "2024-05-06"
+---
+
+
+```{r echo=FALSE, message=FALSE}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(corrplot)
+library(car)
+library(readxl)
+library(e1071)
+library(ROCR)
+library(gbm)
+library(ISLR)
+library(randomForest)
+library(tree)
+library(dplyr)
+library(ggplot2) 
+library(caret)
+library(tree)
+library(ISLR)
+library(rpart)
+library(pROC)
+library(reshape2)
+```
+
+First, let's load both the data-set:
+```{r}
+library(readr)
+sleep <- read_csv("/Users/evabeyebach/Desktop/sleep.csv")
+View(sleep)
+```
+
+# Data Preparation
+
+Before the data can be analyzed and used in the models, it must be cleaned to ensure that there are no inconsistencies that might affect the accuracy and effectiveness of the models. Let's analyze the basic structure and composition of the training set:
+```{r}
+dim(sleep)
+```
+ We can see there are 373 observations and 13 columns.
+ Let's look at the structure of the data set.
+```{r}
+str(sleep)
+```
+
+Now, we will change all the categorical variables to factor variables. We will change the variable names first, to make it easier for the analysis later.
+
+```{r}
+# Changing variable names
+sleep <- sleep %>%
+  rename(Duration = "Sleep Duration",
+         Quality = "Quality of Sleep",
+         ActivityLevel = "Physical Activity Level",
+         StressLevel = "Stress Level",
+         BMI = "BMI Category",
+         BloodPressure = "Blood Pressure",
+         HeartRate = "Heart Rate",
+         Steps = "Daily Steps",
+         Disorder = "Sleep Disorder")
+
+
+```
+
+
+```{r}
+# Changing variables to factor
+sleep$Gender<- as.factor(sleep$Gender)
+sleep$Occupation<- as.factor(sleep$Occupation)
+sleep$BMI<- as.factor(sleep$BMI)
+sleep$Disorder<- as.factor(sleep$Disorder)
+```
+
+```{r}
+str(sleep)
+```
+Since we want Blood pressure to be numeric and it is written as systolic pressure over diastolic, we will separate the column into 2 and build up two different variables from the single one. 
+
+```{r}
+#Divide BloodPressure
+sleep <- separate(sleep, BloodPressure,
+into = c("Systolic", "Diastolic"), sep = "/")
+sleep$Systolic<- as.numeric(sleep$Systolic)
+sleep$Diastolic<- as.numeric(sleep$Diastolic)
+```
+
+Lets look at the summary of the data.We separated it into Diastolic and Systolic.
+
+```{r}
+# Summary of the data
+summary(sleep)
+```
+
+From the summary we can see that BMI has 4 different categories. `Normal`,  `Normal Weight`, `Obese` and `Overweight`. Since we just want to predict a binary variable we will convert the observations either to Normal weight or Overweight. Because the analysis will be easier with a binary dependent variable and obese people is a very small percentage of the overall sample.
+
+```{r}
+sleep <- sleep %>%
+  mutate(BMI = case_when(
+    BMI == "Normal Weight" ~ "Normal",
+    BMI == "Obese" ~ "Overweight",
+    TRUE ~ as.character(BMI)
+  ))
+sleep$BMI<- as.factor(sleep$BMI)
+```
+
+```{r}
+# Summary of the data
+summary(sleep$BMI)
+```
+Now, we have changed `Normal Weight` to `Normal` and obese to Overweight and we can see the data is divided into 2. Now, we will convert it into 0 or 1 and as factor.
+
+```{r}
+
+#convert BMI to binary variable
+sleep$BMI <- ifelse(sleep$BMI == 
+                      "Normal", 1, 0)
+sleep$BMI <- as.factor(sleep$BMI)
+```
+
+
+As far as balanced data, we can say that it is better balanced.
+
+Lets look for duplicates and missing values
+
+
+```{r}
+#missing values
+colSums(is.na(sleep))
+```
+```{r}
+#Looking for duplicates
+dups_id <- sum(duplicated(sleep$`Person ID`))
+print(dups_id)
+```
+No missing values.
+No duplicates under Person ID.
+We will drop person ID as it is not important for our analysis.
+
+```{r}
+sleep <- subset(sleep, select = - `Person ID`)
+```
+
+
+## Visuals Boxplot
+Lets do some data visualization to try to find outliers.
+
+```{r}
+sleep_num <- sleep %>%
+  select_if(is.numeric)
+summary(sleep_num)
+
+```
+
+```{r}
+boxplot(sleep_num[1:6])
+```
+Heart rate seems to have outliers, but we won't change that because it seems to be part of the study. (some people have a higher heart rate than others). All the other variables have no outliers.
+
+## Visuals histogram by target
+
+### Occupation by BMI
+Now we will plot the variables that are interesting to understand the data better.
+
+```{r}
+ggplot(sleep, aes(x = Occupation, fill = factor(BMI))) +
+  geom_bar(position = "stack") +
+  labs(x = "Occupation", y = "Count", fill = "BMI", title = "Occupation by BMI") +
+  scale_fill_manual(values = c("0" = "lightblue", "1" = "lightpink")) +
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.text = element_text(size = 9),  # Increase text size
+        axis.title = element_text(size = 11),  # Increase title size
+        plot.title = element_text(size = 13),  # Increase plot title size
+        legend.title = element_text(size = 9),  # Increase legend title size
+        legend.text = element_text(size = 7))  # Increase legend text size
+```
+
+From this plot we can see that the occuppations are not balanced distributed.
+Nurse, Doctor and engineer have the most frequency. As far as overweight, Nurse, Salesperson and Teacher are the occupation with most overweight people. This seems interesting because in those occupations, people tend to move more, so it should be the opposite. We will further investigate this, to see why BMI is distributed that way.
+
+
+```{r}
+# Melt the data to long format
+data_long <- melt(sleep, id.vars = c("BMI"), measure.vars = c("Gender", "Disorder"))
+
+ggplot(data_long, aes(x = value, fill = factor(BMI))) +
+  geom_bar(position = "stack", width = 0.75) +
+  facet_wrap(~variable, scales = "free_x") +
+  labs(x = "Gender", y = "Count", fill = "BMI", title = "Gender by BMI") +
+  scale_fill_manual(values = c("0" = "lightblue", "1" = "lightpink")) +
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.text = element_text(size = 9),  # Increase text size
+        axis.title = element_text(size = 11),  # Increase title size
+        plot.title = element_text(size = 13),  # Increase plot title size
+        legend.title = element_text(size = 9),  # Increase legend title size
+        legend.text = element_text(size = 7))  # Increase legend text size
+```
+Gender is very balanced, almost same numer of woemn than men. however more of the women are overweighted. 
+Disorder is unbalanced. More people have no disorder. But from the people that have Disorder almost all of them have overweight.
+We will calculate the proportions:
+
+```{r}
+#Calculate BMI and Disorder proportions
+Bmi.vs.disorder.table <- table(sleep$BMI, sleep$Disorder)
+
+# Print the contingency table
+print(Bmi.vs.disorder.table)
+
+# Calculate proportions
+proportions <- prop.table(Bmi.vs.disorder.table, margin = 1) 
+
+# Round the result to 2 decimal places
+proportions_rounded <- round(proportions, digits = 2)
+
+
+print(proportions_rounded)
+```
+93% of people with no disorder have normal weight.
+88% of people with overweight have sleeping disorders.
+
+Now, lets calculate proportions of gender:
+```{r}
+#Calculate BMI and Gender proportions
+Bmi.vs.gender.table <- table(sleep$BMI, sleep$Gender)
+
+# Print the contingency table
+print(Bmi.vs.gender.table)
+
+# Calculate proportions
+gender.proportions <- prop.table(Bmi.vs.gender.table, margin = 1)
+
+proportions_rounded_gender <- round(gender.proportions, digits = 2)
+
+# Calculate row-wise proportions
+print(proportions_rounded_gender)
+```
+68% of females have overweight.
+32% of males have overweight.
+
+To further see why some Ocuppations have more weight, we will analyze whether this depends on the gender.
+
+```{r}
+#proportions Occupation vs. Gender
+Occupation.vs.gender.table <- table(sleep$Gender, sleep$Occupation)
+
+# Print the contingency table
+print(Occupation.vs.gender.table)
+
+# Calculate proportions
+occupation.proportions <- prop.table(Occupation.vs.gender.table, margin = 1)  # Calculate row-wise proportions
+rounded_proportions <- round(occupation.proportions, digits = 2)  # Round to 2 decimal places
+print(rounded_proportions)
+```
+
+Nurses, Salesperson and Teacher where occupations with most overweight. 
+Here is why:
+Nurse= 100% female
+Teacher = 95% female
+
+
+## Visuals Histogram Numerical variables by Target
+
+```{r}
+#histogram heartrate by BMI
+  ggplot(sleep, aes(x = HeartRate, fill = factor(BMI))) +
+  geom_histogram(position = "identity", bins = 10, alpha = 0.8) +
+  labs(x = "Heart Rate", y = "Frequency", fill = "BMI", title = "Histogram of Heart Rate by BMI") +
+  scale_fill_manual(values = c("0" = "blue", "1" = "red")) +
+  theme_minimal() +
+  theme(axis.text = element_text(size = 8),  # Increase text size
+        axis.title = element_text(size = 10),  # Increase title size
+        plot.title = element_text(size = 12))  # Increase plot title size
+```
+more HR indicates more overweight. Or is is that people with more overweight tend to have higher heartrate?
+
+```{r}
+#histogram Age by BMI
+  ggplot(sleep, aes(x = Age, fill = factor(BMI))) +
+  geom_histogram(position = "identity", bins = 10, alpha = 0.8) +
+  labs(x = "Age", y = "Frequency", fill = "BMI", title = "Histogram of Age by BMI") +
+  scale_fill_manual(values = c("0" = "blue", "1" = "red")) +
+  theme_minimal() +
+  theme(axis.text = element_text(size = 8),  # Increase text size
+        axis.title = element_text(size = 10),  # Increase title size
+        plot.title = element_text(size = 12))  # Increase plot title size
+```
+Younger people have lower BMI.
+
+```{r}
+#histogram Duration by BMI
+  ggplot(sleep, aes(x = Duration, fill = factor(BMI))) +
+  geom_histogram(position = "identity", bins = 10, alpha = 0.8) +
+  labs(x = "Quality", y = "Frequency", fill = "BMI", title = "Histogram of Quality by BMI") +
+  scale_fill_manual(values = c("0" = "blue", "1" = "red")) +
+  theme_minimal() +
+  theme(axis.text = element_text(size = 8),  # Increase text size
+        axis.title = element_text(size = 10),  # Increase title size
+        plot.title = element_text(size = 12))  # Increase plot title size
+```
+People sleepng less have a lower BMI. Is it beacuse they sleep worse do to their overweight?
+
+```{r}
+#histogram Steps by BMI
+  ggplot(sleep, aes(x = Steps, fill = factor(BMI))) +
+  geom_histogram(position = "identity", bins = 5, alpha = 0.8) +
+  labs(x = "Steps", y = "Frequency", fill = "BMI", title = "Histogram of Steps by BMI") +
+  scale_fill_manual(values = c("0" = "blue", "1" = "red")) +
+  theme_minimal() +
+  theme(axis.text = element_text(size = 8),  # Increase text size
+        axis.title = element_text(size = 10),  # Increase title size
+        plot.title = element_text(size = 12))  # Increase plot title size
+```
+
+People doing more steps have less overweight. Steps can improve health form this graph.
+
+
+```{r}
+#histogram SL by BMI
+  ggplot(sleep, aes(x = StressLevel, fill = factor(BMI))) +
+  geom_histogram(position = "identity", bins = 10, alpha = 0.8) +
+  labs(x = "StressLevel", y = "Frequency", fill = "BMI", title = "Histogram of StressLevel by BMI") +
+  scale_fill_manual(values = c("0" = "blue", "1" = "red")) +
+  theme_minimal() +
+  theme(axis.text = element_text(size = 8),  # Increase text size
+        axis.title = element_text(size = 10),  # Increase title size
+        plot.title = element_text(size = 12))  # Increase plot title size
+```
+Higher levels of Stress indictae higher BMI. Is it because poeple that have stress tend to eat more, or bacuse poeple with overweight creates stress?
+
+```{r}
+#histogram BP by BMI
+  ggplot(sleep, aes(x = Systolic, fill = factor(BMI))) +
+  geom_histogram(position = "identity", bins = 5, alpha = 0.8) +
+  labs(x = "Systolic", y = "Frequency", fill = "BMI", title = "Histogram of Bloodpressure by BMI") +
+  scale_fill_manual(values = c("0" = "blue", "1" = "red")) +
+  theme_minimal() +
+  theme(axis.text = element_text(size = 8),  # Increase text size
+        axis.title = element_text(size = 10),  # Increase title size
+        plot.title = element_text(size = 12))  # Increase plot title size
+
+```
+Concluisons histograms: 
+
+More HR indicates more overweight
+More BP indicates more Overweright
+More Stress = more overweight
+more steps= less overweight
+less duration = more overweight
+less age= less overweight
+
+
+
+Now, lets do a correlation matrix.
+Since correlation can only be done with numeric variables, we will do a new dataset and recode categorical variables to numeric, to then do the correlation matrix.
+
+
+```{r}
+sleep_cor <- sleep
+
+
+sleep_cor <- sleep_cor %>%
+  mutate(Gender = case_when(
+    Gender == "Male" ~ "1",
+    Gender == "Female" ~ "2",
+    TRUE ~ as.character(Gender)  # Keep other values unchanged
+  ))
+
+sleep_cor <- sleep_cor %>%
+  mutate(Occupation = case_when(
+    Occupation == "Accountant" ~ "1",
+    Occupation == "Doctor" ~ "2",
+    Occupation == "Engineer" ~ "3",
+    Occupation == "Lawyer" ~ "4",
+    Occupation == "Manager" ~ "5",
+    Occupation == "Nurse" ~ "6",
+    Occupation == "Sales Representative" ~ "7",
+    Occupation == "Salesperson" ~ "8",
+    Occupation == "Scientist" ~ "9",
+    Occupation == "Software Engineer" ~ "10",
+    Occupation == "Teacher" ~ "11",
+    TRUE ~ as.character(Occupation)  # Keep other values unchanged
+  ))
+
+sleep_cor <- sleep_cor %>%
+  mutate(Disorder = case_when(
+    Disorder == "None" ~ "1",
+    Disorder == "Insomnia" ~ "2",
+    Disorder == "Sleep Apnea" ~ "2",
+    TRUE ~ as.character(Disorder)  # Keep other values unchanged
+  ))
+str(sleep_cor)
+sleep_cor$BMI<- as.numeric(sleep_cor$BMI)
+sleep_cor$Disorder<- as.numeric(sleep_cor$Disorder)
+sleep_cor$Gender<- as.numeric(sleep_cor$Gender)
+sleep_cor$Occupation<- as.numeric(sleep_cor$Occupation)
+
+```
+
+
+## Correlation Matrix
+
+```{r}
+corr_matrix <- cor(sleep_cor)
+corrplot(corr_matrix, method="circle", type="upper", order = "alphabet", tl.cex = 0.8)
+```
+
+With the correlation Matrix, we want to gain an inisght on which variables might influence each other. Most importantly we are focusing on BMI, sleep quality and heartrate. We will look at the correlation matrix to get some trends and patterns. The variables with highest positive correlation are the following:
+
+1. Duration & Quality (0.883)
+2. DIstolyc/Systolic & Disorder (0.70)
+3. HeartRate & StresLevel (0.67)
+
+Highest negative Correlations are the following:
+
+1. Duration & StressLevel (-0.811)
+2. Quality & StressLevel (-0.89)
+3. Disorder & BMI (-0.81)
+4. BMI and DIstolyc/Systolic ( -0.769)
+5. HeartRate & Quality (-0.659)
+
+From this we can see that Duration and Quality correlate, as well as HR and SL (which makes a lot of sense). High BP leads to Sleep Disorders.
+
+More Stress, less sleep duration and sleep quality. High BMI negative impact on disorders, high bloodpressure negative impact in BMI (or vice versa) and high HR indicates worse sleep quality.
+
+As far as now we could say that lowering BMI, could prevent sleep disorders as well as heart problems.
+Also, a reduction in stress would help to better overall sleep.
+Lets plot some graphs to see the correlation.
+
+## Visual Scatterplots by Targets
+
+```{r}
+
+ggplot(sleep, aes(x = ActivityLevel, y = StressLevel, color = BMI)) +
+  geom_point() +
+  labs(title = "ActivityLevel vs. Stress Level by BMI",
+       x = "ActivityLevel", y = "Stress Level", color = "BMI") +
+  theme_minimal()
+```
+
+Here we can see the tendency that people with higher stresslevel have lower activity and tend to have more overweight. Also, people with higher Activity level tend to have more overweight. So, what we don't know, do they have less stress because they have more activity, which makes them reduce fat? Or does the StressLevel make them eat more and gain weight?
+
+```{r}
+ggplot(sleep, aes(x = HeartRate, y = Quality, color = BMI)) +
+  geom_point() +  # Replace geom_point() with geom_density_2d()
+  labs(title = "HeartRate vs. Sleep Quality by BMI",
+       x = "HeartRate", y = "Sleep Quality", color = "BMI") +
+  theme_minimal()
+```
+The higher the heartrate, the lower the sleep quality and more weight.
+
+```{r}
+#steps vs. heartrate
+ggplot(sleep, aes(x = Steps, y = HeartRate, color = BMI)) +
+  geom_point() +  # Replace geom_point() with geom_density_2d()
+  labs(title = "Steps vs. HeartRate by BMI",
+       x = "Steps", y = "HeartRate", color = "BMI") +
+  theme_minimal()
+```
+
+More steps reduces heartrate and overweight.
+
+```{r}
+ggplot(sleep, aes(x = Diastolic, y = Systolic, color = BMI)) +
+  geom_point() +
+  labs(title = "Bloodpressure by BMI",
+       x = "Diastolic", y = "Systolic", color = "BMI") +
+  theme_minimal()
+```
+HIGH BMI creates higher BP.
+We can conclude from the graphs that more Activity Level reduces Stress and Heart Rate, which helps for sleep quality, disorders and cancer problems.
+
+## Scatterplots by Disorder
+
+```{r}
+ggplot(sleep, aes(x = HeartRate, y = Systolic, color = Disorder)) +
+  geom_point() +
+  labs(title = "HeartRate vs. Bloodpressure by Disorder",
+       x = "HeartRate", y = "Bloodpressure", color = "Disorder") +
+  theme_minimal()
+```
+
+Higher Bloodpressure and HR produce sleep disorders.
+
+
+```{r}
+# AL vs Quality by Sleep Disorder
+ggplot(sleep, aes(x = ActivityLevel, y = Quality, color = Disorder)) +
+  geom_point() +
+  labs(title = "ActivityLevel vs. Quality by Disorder",
+       x = "ActivityLevel", y = "Quality", color = "Disorder") +
+  theme_minimal()
+```
+Moer Activitylevel improves sleep quality and reduces sleep disorders.
+
+## Modelling
+
+### Data Splitting
+
+```{r}
+set.seed(100)
+row.num <- sample(1:nrow(sleep), 0.7*nrow(sleep))
+sleep_train <- sleep[row.num,]
+sleep_test <- sleep[-row.num,]
+```
+
+##Logistic Regresion
+
+Now, it's time see whether a logistic regression model can accurately and effectively predict whether a client will have overwegiht ("0") or will not have overweight ("1"). Our Y and dependent variable will be `BMI`.
+We will delete Occupation because it created different factors in the testing set.
+The data was already split, so we will use first the training set. 
+
+
+```{r}
+sleep_train <- subset(sleep_train, select = - `Occupation`)
+sleep_test <- subset(sleep_test, select = - `Occupation`)
+
+glm1 <- glm(as.factor(BMI) ~ ., family = binomial, data = sleep_train)
+summary(glm1)
+```
+
+This model does not seem to be great at predicting BMI, lets see if it is because of vif().
+
+Lets look for multicollinearity.
+```{r}
+vif(glm1)
+```
+
+```{r}
+#create new models deleting multilinear variables
+glm2 <- glm(as.factor(BMI) ~. -Duration -Diastolic -Quality -Steps -HeartRate, family = binomial, data = sleep_train)
+vif(glm2)
+summary(glm2)
+```
+After removing a lot of variables that caused multicollinearity, we can see that `Systolic`, `StressLevel`, `ActivityLevel` and `Age` do have an impact on BMI. (They are significant). The coefficients suggest that Female tend to have more overweight, and that people with overweight do also have sleep disorders.
+
+The dispersion for binomial family is taken to be 1 (normal weight) and negative coefficients of Stress, Age and Blood Pressure. Meaning that as those decrease, the weight is more likely to be normal. 
+
+In GenderMale coefficient of 0.008 suggests that, if there were an effect of being male, it would lead to a very small increase in the log odds of success. However, since the coefficient is not statistically significant, we cannot confidently attribute this small increase to being male rather than random variation.The same happens with Disorder. 
+
+## Lets predict on testing set
+
+```{r}
+pred_test <- predict(glm2, newdata = sleep_test, type="response")
+predictions <- ifelse(pred_test >= 0.5,1,0)
+caret::confusionMatrix(as.factor(predictions), as.factor(sleep_test$BMI))
+```
+
+We can see that this model has a very good accuracy. 94.69% . Sensitivity (91.30%) and Specificity (97.01%) is also very high. It does very well predicting obese people. Lets try decision trees to see how it would predict.
+
+## Untuned Decision Tree
+
+```{r}
+set.seed(100)
+row.num <- sample(1:nrow(sleep), 0.7*nrow(sleep))
+sleep_train <- sleep[row.num,]
+sleep_test <- sleep[-row.num,]
+
+```
+ We will delete some variables because they create new levels in the testing set.
+```{r}
+sleep_train <- subset(sleep_train, select = - `Occupation`)
+sleep_test <- subset(sleep_test, select = - `Occupation`)
+sleep_train <- subset(sleep_train, select = - `Disorder`)
+sleep_test <- subset(sleep_test, select = - `Disorder`)
+```
+
+```{r}
+# Grow a tree using the training set 
+tree = tree(BMI ~ ., data = sleep_train)
+# Get predictions on the test set
+preds = predict(tree, newdata = sleep_test, type = "class")
+
+# Convert predicted class labels to numeric
+caret::confusionMatrix(as.factor(preds), as.factor(sleep_test$BMI))
+```
+Plot tree
+
+```{r}
+plot(tree)
+text(tree, cex = 0.7)
+```
+Accuracy is very high (0.9452) and both Sensitivy and specificity also (97%). We will tune the tree to see if can get even better and more accurate.
+
+Most importat variables are: Systolic, HeartRate, Steps and Age.
+
+## Pruned Tree
+
+```{r}
+set.seed(100)
+cv.sleep = cv.tree(tree, FUN = prune.misclass)
+```
+
+```{r}
+#Get the best size
+best_size = cv.sleep$size[which.min(cv.sleep$dev)]
+best_size
+```
+```{r}
+#Get the pruned tree of the best size 
+prune.sleep = prune.tree(tree, best = 8)
+
+# Get predictions on the test set
+preds_pruned = predict(prune.sleep, newdata = sleep_test, type= "class")
+
+caret::confusionMatrix(as.factor(preds_pruned), as.factor(sleep_test$BMI))
+```
+Same accuracy, sensitivity and specificity as first tree. 
+```{r}
+plot(prune.tree)
+text(prune.tree, cex = 0.7)
+
+```
+
+Same Accuracy, Sensitivy and Specifity. Tree seems interesting.Now, Disorder is the most important variable, and after that BP, Age and Steps. Higher age that 44 or higher BP than 133 indicated overweight. less Steps than 6500 also usually. Most important variables are Age, BP and Steps.
+
+Lets try Random Forest
+
+## Random forest
+
+```{r}
+#training and tetsing data
+set.seed(100)
+row.num <- sample(1:nrow(sleep), 0.7*nrow(sleep))
+sleep_train <- sleep[row.num,]
+sleep_test <- sleep[-row.num,]
+rf1  <- randomForest(as.factor(BMI) ~ ., data = sleep_train, 
+                           mtry = 10, ntree = 500, importance = TRUE)
+
+```
+## Predict
+
+
+
+Since random forest does not struggle as much with multicollinearity we did not have to delete any variables and we can say that the accuracy is very good as well, using all the variables.
+
+
+```{r}
+rf.probs <- predict(rf1, newdata = sleep_test)
+caret::confusionMatrix(as.factor(rf.probs), as.factor(sleep_test$BMI))
+```
+99.12 Accuracy!!!
+
+Lets look at the variable importance plot.
+
+```{r}
+#Get variable importance measure for each predictor 
+importance(rf1)
+varImpPlot(rf1)
+```
+
+Now we got the MeanDecreaseAccuracy imprtance plot and we will look at those values to see which variables are more important for the classification.
+As far as the values we get, Occupation Diastolic/Systolic and Age are the variables that mostly affect BMI.
+Lets do tuning to see if we can change the model.
+
+##  Tuned Random Forest
+```{r}
+# Establish a list of possible values for hyper-parameters
+mtry.values <- seq(5,15,5)
+ntree.values <- seq(3e3,9e3,3e3)
+
+# Create a data frame containing all combinations 
+hyper_grid <- expand.grid(mtry = mtry.values, ntree = ntree.values)
+
+# Create an empty vector to store OOB error values
+oob_err <- c()
+
+# Write a loop over the rows of hyper_grid to train the grid of models
+for (i in 1:nrow(hyper_grid)) {
+  
+  # Train a Random Forest model
+  model <- randomForest(as.factor(BMI) ~ ., data = sleep_train,importance = T, mtry = hyper_grid$mtry[i], 
+                        ntree = hyper_grid$ntree[i])  
+
+  # Store OOB error for the model                      
+  oob_err[i] <- model$err.rate[length(model$err.rate)]
+}
+
+# Identify optimal set of hyperparmeters based on OOB error
+opt_i <- which.min(oob_err)
+print(hyper_grid[opt_i,])
+```
+mtry = 5, ntree = 3000.
+
+```{r}
+rf.opt <- randomForest(as.factor(BMI) ~ ., data = sleep_train, mtry = 5, ntree = 3000,importance = T)
+
+rf.probs.opt <- predict(rf.opt, newdata = sleep_test)
+```
+
+Accuracy of RF
+```{r}
+caret::confusionMatrix(as.factor(rf.probs.opt), as.factor(sleep_test$BMI))
+
+```
+Same confusion matrix and Accuracy. 
+Variable Importance plot:
+
+```{r}
+#Get variable importance measure for each predictor 
+importance(rf.opt)
+varImpPlot(rf.opt)
+rf_importance <- importance(rf.opt)
+
+# Convert variable importance to a data frame
+rf_importance_df <- as.data.frame(rf_importance)
+
+# Sort the data frame by MeanDecreaseAccuracy in descending order
+rf_importance_df <- rf_importance_df[order(-rf_importance_df$MeanDecreaseAccuracy), ]
+
+# Create a horizontal bar plot
+ggplot(rf_importance_df, aes(x = MeanDecreaseAccuracy, y = reorder(rownames(rf_importance_df), MeanDecreaseAccuracy))) +
+  geom_bar(stat = "identity", fill = "lightpink") +
+  labs(title = "Variable Importance Plot",
+       x = "Mean Decrease in Accuracy", y = "Variables") +
+  theme_minimal()
+```
+
+After tuning, we can see that Occupation, Diastolic/Systolic and Age are still the same important variables. So, does this mean that higher diastolic and systolic heart causes higher BMI or viceversa?
+
+## Linear Regression HeartRate
+
+The objective of this study is to improve health of the patients. Therefore, now, we will analyze heartrate and sleep quality, to see which factors induce those problems in people. Lets start by analyzing heartrate.
+
+
+```{r}
+set.seed(100)
+row.num <- sample(1:nrow(sleep), 0.7*nrow(sleep))
+sleep_train <- sleep[row.num,]
+sleep_test <- sleep[-row.num,]
+sleep_train <- subset(sleep_train, select = - `Occupation`)
+sleep_test <- subset(sleep_test, select = - `Occupation`)
+
+lm.hr <- lm(as.numeric(HeartRate)~. , data = sleep_train)
+summary(lm.hr)
+```
+lets check multicollinearity
+
+```{r}
+vif(lm.hr)
+```
+Some variables have high multicollinearity, which could lead to overfitting. We will delete those from the model
+
+```{r}
+lm.hr2 <- lm(as.numeric(HeartRate)~. -Diastolic -Quality -Duration, data = sleep_train)
+summary(lm.hr2)
+vif(lm.hr2)
+```
+Adjusting for multicollinearity reduces the R-Squared. However, from the coefficients we can say that Females tend to have higher HeartRate, younger people as well, high stress level and BMI lead to higher HeartRate and Apnea sleep is also correlated with high HeartRate. 
+From the first model, before vif() correction we could see that the highest increase in BMI lead to higher HeartRate, wich means that people with more obesity have more risk of heart diseases. Also teacher had less heartrate and software engineers more.
+
+## predict on testing
+```{r}
+predictions = predict(lm.hr2, newdata = sleep_test, type = "response")
+
+```
+
+
+```{r}
+mse = mean((sleep_test$HeartRate - predictions)^2)
+mae = mean(abs(sleep_test$HeartRate - predictions))
+me = mean(sleep_test$HeartRate - predictions)
+mape =  mean(abs(sleep_test$HeartRate - predictions)/sleep_test$HeartRate)*100
+print(mse)
+print(mae)
+```
+
+
+
+We see from this model that MSE is not too bad, so this would not be such a bad model for this scenario. However, an R^2 of 76% is not great, so it will not be our best preference for a model.
+
+## Linear Regression Sleep Quality
+Lets do a linear regression to predict sleep quality:
+
+```{r}
+set.seed(100)
+row.num <- sample(1:nrow(sleep), 0.7*nrow(sleep))
+sleep_train <- sleep[row.num,]
+sleep_test <- sleep[-row.num,]
+sleep_train <- subset(sleep_train, select = - `Occupation`)
+sleep_test <- subset(sleep_test, select = - `Occupation`)
+
+lm.sq <- lm(as.numeric(Quality)~. , data = sleep_train)
+summary(lm.sq)
+```
+R^2 is very high, lets look at multicollinearity.
+
+```{r}
+vif(lm.sq)
+```
+```{r}
+lm.sq2 <- lm(as.numeric(Quality)~. -Diastolic, data = sleep_train)
+summary(lm.sq2)
+```
+After adjusting for multicollinearity,R^2 is stil very high at 94.86%.  We figured out that a lower Systolic pressure lead to better sleep quality. Also, lower heartrate, and Stresslevel do have an positive increase in sleep quality (However, those are not significant, so it might not be as important for this study) . Normal body weight lead to better sleep quality. More Steps also indicated better sleep qualtiy. Males tend to sleep better as well.
+
+## predict on testing
+```{r}
+predictions.sq = predict(lm.sq2, newdata = sleep_test, type = "response")
+
+```
+
+
+```{r}
+mse = mean((sleep_test$Quality - predictions.sq)^2)
+mae = mean(abs(sleep_test$Quality - predictions.sq))
+me = mean(sleep_test$Quality - predictions.sq)
+mape =  mean(abs(sleep_test$Quality - predictions.sq)/sleep_test$Quality)*100
+print(mse)
+print(mae)
+```
+
+We can conclude that this model is very good at predicting the sleep quality and we can see which variables are the ones that mostly affect sleep quality.
+
+## CHI-Square test sleep disorder and BMI
+
+The H0 for this analysis states: 
+There is no relationship between Sleep Disorder and Occupation
+H1 = There is a relationship between Sleep Disorder and Occupation
+
+```{r}
+# Create a contingency table
+contingency_table <- table(sleep$Disorder, sleep$BMI)
+# Perform chi-square test
+chi_sq_test <- chisq.test(contingency_table)
+# Print the results
+print(chi_sq_test)
+```
+Since the p-value is lower than 0.05 we reject the null hypothesis, concluding that there **is a relationship** between Sleep Disorder and BMI.
+```{r}
+# If you want a mosaic plot of these data
+mosaicplot( t(contingency_table), col = c("lightblue", "lightpink", "lightyellow"), 
+ cex.axis = 1, main = "", las = 2,
+ sub = "BMI", ylab = "Disorder")
+```
+From the graph:
+People with Higher weight have more sleep disorders that people with lower weight.
+
+
+
+## T-Test Quality and ActivityLevel
+
+We also want to analyze if there is correlation between ActivityLevel and Quality
+
+```{r}
+# Calculate Pearson's correlation coefficient
+t_test_result <- t.test(sleep$ActivityLevel, 
+                        sleep$Quality)
+# Print the results
+print(t_test_result)
+```
+
+Null hypothesis (H0): There is no significant difference in the mean test scores between ActivityLevels and Sleep Quality.
+Alternative hypothesis (H1): There is significant difference in the mean test scores between ActivityLevels and Sleep Quality.
+
+
+We reject H0: p-value lower than 0.05
+There is a statistically significant difference between the mean Sleep Quality and mean ActivityLevels
+
+This result suggests that there is an association between the variables (individuals with higher activity levels indeed have better sleep quality).
+
+
+## T-Test Quality and HeartRate
+
+We also want to analyze if there is correlation between ActivityLevel and HeartRate
+
+```{r}
+# Calculate Pearson's correlation coefficient
+t_test_result2 <- t.test(sleep$ActivityLevel, 
+                        sleep$HeartRate)
+# Print the results
+print(t_test_result2)
+```
+
+
+Null hypothesis (H0): There is no significant difference in the mean test scores between ActivityLevels and HeartRate.
+Alternative hypothesis (H1): There is significant difference in the mean test scores between ActivityLevels and HeartRate.
+
+We reject H0: p-value lower than 0.05
+There is a statistically significant difference between the mean ActivityLevels and mean HeartRate.
+
+
+```{r}
+# Calculate Pearson's correlation coefficient
+t_test_result3 <- t.test(sleep$StressLevel, 
+                        sleep$HeartRate)
+# Print the results
+print(t_test_result3)
+```
+
+Null hypothesis (H0): There is no significant difference in the mean test scores between StressLevels and HeartRate.
+Alternative hypothesis (H1): There is significant difference in the mean test scores between StressLevel and HeartRate.
+
+We reject H0: p-value lower than 0.05
+There is a statistically significant difference between the mean StressLevel and mean HR
+One does influence the other and viceversa.
+
+We can also state that people with higher BMI does influence HeartRate.
